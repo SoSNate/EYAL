@@ -1,454 +1,350 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-// --- Alphabet Data (5-Year-Old) ---
+// --- Data for 5-Year-Old (Visual & Audio Heavy) ---
+
 const alphabetData = [
   { letter: "A", word: "Apple", hebrew: "תפוח", icon: "🍎" },
   { letter: "B", word: "Ball", hebrew: "כדור", icon: "⚽" },
   { letter: "C", word: "Cat", hebrew: "חתול", icon: "🐱" },
   { letter: "D", word: "Dog", hebrew: "כלב", icon: "🐶" },
   { letter: "E", word: "Elephant", hebrew: "פיל", icon: "🐘" },
-  { letter: "F", word: "Fish", hebrew: "דג", icon: "🐠" },
-  { letter: "G", word: "Giraffe", hebrew: "ג'ירפה", icon: "🦒" },
-  { letter: "H", word: "House", hebrew: "בית", icon: "🏠" },
-  { letter: "I", word: "Ice Cream", hebrew: "גלידה", icon: "🍦" },
-  { letter: "J", word: "Jellyfish", hebrew: "מדוזה", icon: "🪼" }
+  { letter: "F", word: "Fish", hebrew: "דג", icon: "🐟" },
+  { letter: "G", word: "Gorilla", hebrew: "גורילה", icon: "🦍" },
+  { letter: "H", word: "Hat", hebrew: "כובע", icon: "🎩" },
+  { letter: "I", word: "Ice cream", hebrew: "גלידה", icon: "🍦" },
+  { letter: "J", word: "Juice", hebrew: "מיץ", icon: "🧃" }
 ];
 
-// --- First Words (5-Year-Old) ---
 const firstWordsData = [
   { en: "Sun", he: "שמש", icon: "☀️", letters: ["S", "u", "n"] },
   { en: "Bus", he: "אוטובוס", icon: "🚌", letters: ["B", "u", "s"] },
-  { en: "Car", he: "מכונית", icon: "🚗", letters: ["C", "a", "r"] },
-  { en: "Bug", he: "חרק", icon: "🐛", letters: ["B", "u", "g"] },
+  { en: "Car", he: "אוטו", icon: "🚗", letters: ["C", "a", "r"] },
+  { en: "Bug", he: "חרק", icon: "🐞", letters: ["B", "u", "g"] },
   { en: "Pig", he: "חזיר", icon: "🐷", letters: ["P", "i", "g"] },
-  { en: "Cow", he: "פרה", icon: "🐄", letters: ["C", "o", "w"] },
+  { en: "Cow", he: "פרה", icon: "🐮", letters: ["C", "o", "w"] },
   { en: "Bat", he: "עטלף", icon: "🦇", letters: ["B", "a", "t"] },
   { en: "Bed", he: "מיטה", icon: "🛏️", letters: ["B", "e", "d"] }
 ];
 
-// --- Simple Sentences (5-Year-Old) ---
 const simpleSentencesData = [
   { text: "I see a cat", audio: "I see a cat", icon: "👀 🐱" },
-  { text: "The sun is hot", audio: "The sun is hot", icon: "☀️ 🔥" },
-  { text: "I like the dog", audio: "I like the dog", icon: "❤️ 🐶" },
-  { text: "The car is red", audio: "The car is red", icon: "🚗 ❤️" }
+  { text: "The sun is hot", audio: "The sun is hot", icon: "☀️ 🥵" },
+  { text: "I like ice cream", audio: "I like ice cream", icon: "❤️ 🍦" },
+  { text: "The dog can run", audio: "The dog can run", icon: "🐶 🏃" }
 ];
 
 export default function App() {
-  const [currentView, setCurrentView] = useState('menu');
+  // Lottie Animation setup
+  useEffect(() => {
+    if (!customElements.get('dotlottie-wc')) {
+      const script = document.createElement('script');
+      script.src = "https://unpkg.com/@lottiefiles/dotlottie-wc@0.9.3/dist/dotlottie-wc.js";
+      script.type = "module";
+      document.head.appendChild(script);
+    }
+  }, []);
+
+  const [view, setView] = useState('abc');
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [score, setScore] = useState(0);
-  const [selectedLetters, setSelectedLetters] = useState([]);
-  const [cardsFlipped, setCardsFlipped] = useState([]);
+  const [activeAnim, setActiveAnim] = useState(null);
+
+  // Find It Game State
+  const [findItTarget, setFindItTarget] = useState(null);
+  const [findItOptions, setFindItOptions] = useState([]);
+
+  // Match Game State
+  const [matchCards, setMatchCards] = useState([]);
+  const [flippedCards, setFlippedCards] = useState([]);
   const [matchedPairs, setMatchedPairs] = useState([]);
-  const [gameMessage, setGameMessage] = useState('');
 
-  const speechSynthRef = useRef(null);
-
-  // Speak text function
-  const speakText = (text) => {
+  // Audio function specifically tuned for young kids (slow and enthusiastic)
+  const speak = (text) => {
+    window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 0.75; // Slower for young learners
-    utterance.pitch = 1.2; // Slightly higher pitch
-    speechSynthesis.speak(utterance);
+    utterance.lang = 'en-US';
+    utterance.rate = 0.75; // Very slow and clear
+    utterance.pitch = 1.2; // Friendly pitch
+    window.speechSynthesis.speak(utterance);
   };
 
-  // --- ABC Game ---
-  const handleAbcNext = () => {
-    setCurrentIndex((currentIndex + 1) % alphabetData.length);
+  const playSound = (type) => {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      if (type === 'success') {
+        osc.frequency.setValueAtTime(400, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(800, ctx.currentTime + 0.2);
+        gain.gain.setValueAtTime(0.2, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+      } else {
+        osc.frequency.setValueAtTime(200, ctx.currentTime);
+        gain.gain.setValueAtTime(0.2, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+      }
+      osc.start();
+      osc.stop(ctx.currentTime + 0.5);
+    } catch (e) {}
   };
 
-  const handleAbcPrev = () => {
-    setCurrentIndex((currentIndex - 1 + alphabetData.length) % alphabetData.length);
+  const triggerAnim = (type) => {
+    setActiveAnim(type);
+    setTimeout(() => setActiveAnim(null), 2000);
   };
 
-  const abcView = () => {
-    const current = alphabetData[currentIndex];
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-blue-300 to-blue-100 flex flex-col items-center justify-center p-4">
-        <div className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-md">
-          <div className="text-center mb-6">
-            <div className="text-9xl mb-4">{current.icon}</div>
-            <div className="text-6xl font-bold text-blue-600 mb-4">{current.letter}</div>
-            <div className="text-3xl font-semibold text-gray-800 mb-2">{current.word}</div>
-            <div className="text-xl text-gray-600">{current.hebrew}</div>
+  // --- Games Logic ---
+
+  const startFindItGame = () => {
+    const target = firstWordsData[Math.floor(Math.random() * firstWordsData.length)];
+    const others = firstWordsData.filter(w => w.en !== target.en).sort(() => 0.5 - Math.random()).slice(0, 3);
+    const options = [...others, target].sort(() => 0.5 - Math.random());
+
+    setFindItTarget(target);
+    setFindItOptions(options);
+    setView('find');
+
+    setTimeout(() => {
+      speak(`Where is the ${target.en}?`);
+    }, 500);
+  };
+
+  const handleFindItClick = (selected) => {
+    if (selected.en === findItTarget.en) {
+      playSound('success');
+      triggerAnim('success-check');
+      speak(`Yes! ${selected.en}!`);
+      setTimeout(startFindItGame, 2000);
+    } else {
+      playSound('error');
+      speak(`No, that is a ${selected.en}. Where is the ${findItTarget.en}?`);
+    }
+  };
+
+  const startMatchGame = () => {
+    // We match Letter to Icon for 5yo
+    const selected = alphabetData.sort(() => 0.5 - Math.random()).slice(0, 3);
+    let cards = [];
+    selected.forEach((item, i) => {
+      cards.push({ id: `letter-${i}`, display: item.letter, type: 'letter', pairId: i, sound: item.letter });
+      cards.push({ id: `icon-${i}`, display: item.icon, type: 'icon', pairId: i, sound: item.word });
+    });
+    setMatchCards(cards.sort(() => 0.5 - Math.random()));
+    setFlippedCards([]);
+    setMatchedPairs([]);
+    setView('match');
+  };
+
+  const handleCardClick = (card) => {
+    if (flippedCards.length === 2 || flippedCards.some(c => c.id === card.id) || matchedPairs.includes(card.pairId)) return;
+
+    speak(card.sound);
+    const newFlipped = [...flippedCards, card];
+    setFlippedCards(newFlipped);
+
+    if (newFlipped.length === 2) {
+      if (newFlipped[0].pairId === newFlipped[1].pairId) {
+        playSound('success');
+        setTimeout(() => {
+          setMatchedPairs(prev => [...prev, newFlipped[0].pairId]);
+          setFlippedCards([]);
+          if (matchedPairs.length + 1 === 3) triggerAnim('confetti');
+        }, 800);
+      } else {
+        playSound('error');
+        setTimeout(() => setFlippedCards([]), 1200);
+      }
+    }
+  };
+
+  // --- Render Helpers ---
+
+  const NavButton = ({ icon, label, target, action, color }) => (
+    <button
+      onClick={() => { if(action) action(); else { setView(target); setCurrentIndex(0); } }}
+      className={`flex flex-col items-center justify-center p-3 rounded-3xl border-b-8 active:border-b-0 active:translate-y-2 transition-all ${view === target ? `bg-${color}-500 text-white border-${color}-700` : `bg-white text-slate-700 border-${color}-200 hover:bg-${color}-50`}`}
+    >
+      <span className="text-4xl mb-1">{icon}</span>
+      <span className="font-black text-sm">{label}</span>
+    </button>
+  );
+
+  return (
+    <div className="min-h-screen bg-sky-100 p-4 md:p-8 font-sans select-none" dir="rtl">
+      <div className="max-w-4xl mx-auto">
+
+        {/* Animations */}
+        {activeAnim === 'success-check' && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none bg-white/40 backdrop-blur-sm">
+            {/* Removed lottie component due to 403 error. Replaced with simple text animation. */}
+             <div className="text-[150px] animate-bounce">✅</div>
           </div>
+        )}
+        {activeAnim === 'confetti' && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none bg-white/40 backdrop-blur-sm">
+             {/* Removed lottie component due to 403 error. Replaced with simple text animation. */}
+            <div className="text-[150px] animate-spin">🎉</div>
+          </div>
+        )}
 
-          <button
-            onClick={() => speakText(current.word)}
-            className="w-full bg-green-400 hover:bg-green-500 text-white font-bold py-3 px-4 rounded-lg mb-4 text-xl"
-          >
-            🔊 Hear it!
-          </button>
+        <header className="text-center mb-8">
+          <h1 className="text-5xl font-black text-yellow-500 drop-shadow-md mb-6 tracking-wide" style={{ WebkitTextStroke: '2px #d97706' }}>
+            הספארי של אייל 🦁
+          </h1>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <NavButton icon="🅰️" label="אותיות" target="abc" color="red" />
+            <NavButton icon="🐱" label="מילים" target="words" color="blue" />
+            <NavButton icon="🔍" label="איפה אני?" target="find" action={startFindItGame} color="green" />
+            <NavButton icon="🃏" label="זוגות" target="match" action={startMatchGame} color="purple" />
+            <NavButton icon="🗣️" label="משפטים" target="sentences" color="orange" />
+          </div>
+        </header>
 
-          <div className="flex gap-3 justify-center">
+        {/* --- ABC VIEW --- */}
+        {view === 'abc' && (
+          <div className="bg-white rounded-[3rem] p-10 shadow-2xl border-4 border-red-200 text-center relative overflow-hidden">
+            <div className="absolute top-4 right-4 bg-red-100 text-red-600 font-bold px-4 py-2 rounded-full border-2 border-red-300">
+              {currentIndex + 1} / {alphabetData.length}
+            </div>
+
             <button
-              onClick={handleAbcPrev}
-              className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-6 rounded-lg text-lg"
+              onClick={() => speak(`${alphabetData[currentIndex].letter} is for ${alphabetData[currentIndex].word}`)}
+              className="mt-8 text-[150px] leading-none font-black text-red-500 hover:scale-110 transition-transform cursor-pointer drop-shadow-lg"
+              dir="ltr"
             >
-              ← Back
+              {alphabetData[currentIndex].letter}
             </button>
-            <button
-              onClick={handleAbcNext}
-              className="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-6 rounded-lg text-lg"
-            >
-              Next →
-            </button>
+
+            <div className="flex justify-center items-center gap-6 mt-8">
+              <span className="text-8xl animate-bounce">{alphabetData[currentIndex].icon}</span>
+              <div className="text-left" dir="ltr">
+                <p className="text-5xl font-black text-slate-800">{alphabetData[currentIndex].word}</p>
+                <p className="text-2xl text-slate-400 font-bold" dir="rtl">{alphabetData[currentIndex].hebrew}</p>
+              </div>
+            </div>
+
+            <div className="flex justify-between mt-12">
+              <button onClick={() => setCurrentIndex(prev => (prev - 1 + alphabetData.length) % alphabetData.length)} className="w-20 h-20 bg-slate-100 rounded-full text-3xl flex items-center justify-center hover:bg-slate-200 border-b-4 border-slate-300 active:border-b-0 active:translate-y-1">⬅️</button>
+              <button onClick={() => speak(alphabetData[currentIndex].word)} className="w-24 h-24 bg-red-500 rounded-full text-5xl flex items-center justify-center hover:bg-red-400 border-b-8 border-red-700 active:border-b-0 active:translate-y-2 text-white">🔊</button>
+              <button onClick={() => setCurrentIndex(prev => (prev + 1) % alphabetData.length)} className="w-20 h-20 bg-slate-100 rounded-full text-3xl flex items-center justify-center hover:bg-slate-200 border-b-4 border-slate-300 active:border-b-0 active:translate-y-1">➡️</button>
+            </div>
           </div>
+        )}
 
-          <button
-            onClick={() => setCurrentView('menu')}
-            className="w-full mt-4 bg-gray-400 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg"
-          >
-            Back to Menu
-          </button>
-        </div>
-      </div>
-    );
-  };
+        {/* --- WORDS VIEW --- */}
+        {view === 'words' && (
+          <div className="bg-white rounded-[3rem] p-10 shadow-2xl border-4 border-blue-200 text-center">
+            <span className="text-[120px] drop-shadow-xl">{firstWordsData[currentIndex].icon}</span>
 
-  // --- Words Game ---
-  const wordsView = () => {
-    const current = firstWordsData[currentIndex];
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-purple-300 to-purple-100 flex flex-col items-center justify-center p-4">
-        <div className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-md">
-          <div className="text-center mb-6">
-            <div className="text-7xl mb-4">{current.icon}</div>
-            <div className="text-4xl font-bold text-purple-600 mb-4">{current.en}</div>
-            <div className="text-2xl text-gray-600">{current.he}</div>
-          </div>
-
-          <div className="mb-6">
-            <p className="text-center font-bold mb-3 text-gray-700">Letter Sounds:</p>
-            <div className="flex gap-2 justify-center flex-wrap">
-              {current.letters.map((letter, idx) => (
+            <div className="flex justify-center gap-4 mt-8 mb-4" dir="ltr">
+              {firstWordsData[currentIndex].letters.map((char, i) => (
                 <button
-                  key={idx}
-                  onClick={() => speakText(letter)}
-                  className="bg-yellow-300 hover:bg-yellow-400 text-black font-bold py-2 px-4 rounded-lg text-lg"
+                  key={i}
+                  onClick={() => speak(char)}
+                  className="w-24 h-32 bg-blue-100 border-4 border-blue-300 rounded-2xl flex items-center justify-center text-7xl font-black text-blue-600 hover:bg-blue-500 hover:text-white transition-colors"
                 >
-                  {letter}
+                  {char}
+                </button>
+              ))}
+            </div>
+
+            <p className="text-2xl text-slate-400 font-bold mb-10">{firstWordsData[currentIndex].hebrew}</p>
+
+            <div className="flex justify-between mt-4">
+              <button onClick={() => setCurrentIndex(prev => (prev - 1 + firstWordsData.length) % firstWordsData.length)} className="w-20 h-20 bg-slate-100 rounded-full text-3xl flex items-center justify-center border-b-4 border-slate-300 active:border-b-0 active:translate-y-1">⬅️</button>
+              <button onClick={() => speak(firstWordsData[currentIndex].en)} className="px-10 h-20 bg-blue-500 rounded-3xl text-3xl font-black text-white flex items-center justify-center border-b-8 border-blue-700 active:border-b-0 active:translate-y-2">השמע מילה 🔊</button>
+              <button onClick={() => setCurrentIndex(prev => (prev + 1) % firstWordsData.length)} className="w-20 h-20 bg-slate-100 rounded-full text-3xl flex items-center justify-center border-b-4 border-slate-300 active:border-b-0 active:translate-y-1">➡️</button>
+            </div>
+          </div>
+        )}
+
+        {/* --- FIND IT GAME --- */}
+        {view === 'find' && findItTarget && (
+          <div className="bg-white rounded-[3rem] p-10 shadow-2xl border-4 border-green-200 text-center">
+            <h2 className="text-4xl font-black text-green-600 mb-2">איפה אני? 🔍</h2>
+            <p className="text-xl font-bold text-slate-500 mb-8">לחץ על הרמקול ואז חפש את התמונה</p>
+
+            <button
+              onClick={() => speak(`Where is the ${findItTarget.en}?`)}
+              className="w-32 h-32 bg-green-500 rounded-full mx-auto flex items-center justify-center text-6xl mb-12 border-b-8 border-green-700 active:border-b-0 active:translate-y-2 text-white"
+            >
+              🔊
+            </button>
+
+            <div className="grid grid-cols-2 gap-6">
+              {findItOptions.map((opt, i) => (
+                <button
+                  key={i}
+                  onClick={() => handleFindItClick(opt)}
+                  className="bg-slate-50 h-40 rounded-3xl border-4 border-slate-200 flex items-center justify-center text-[80px] hover:bg-green-50 hover:border-green-300 hover:scale-105 transition-all"
+                >
+                  {opt.icon}
                 </button>
               ))}
             </div>
           </div>
+        )}
 
-          <button
-            onClick={() => speakText(current.en)}
-            className="w-full bg-green-400 hover:bg-green-500 text-white font-bold py-3 px-4 rounded-lg mb-4 text-xl"
-          >
-            🔊 Hear Word!
-          </button>
+        {/* --- MATCH GAME --- */}
+        {view === 'match' && (
+          <div className="bg-white rounded-[3rem] p-10 shadow-2xl border-4 border-purple-200 text-center min-h-[500px]">
+            <h2 className="text-4xl font-black text-purple-600 mb-8">התאם אות לתמונה 🃏</h2>
 
-          <div className="flex gap-3 justify-center">
-            <button
-              onClick={() => setCurrentIndex((currentIndex - 1 + firstWordsData.length) % firstWordsData.length)}
-              className="bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-6 rounded-lg text-lg"
-            >
-              ← Back
-            </button>
-            <button
-              onClick={() => setCurrentIndex((currentIndex + 1) % firstWordsData.length)}
-              className="bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-6 rounded-lg text-lg"
-            >
-              Next →
-            </button>
+            {matchedPairs.length === 3 ? (
+              <div className="py-10">
+                <div className="text-[100px] mb-6">🎉</div>
+                <h3 className="text-5xl font-black text-purple-500 mb-8">כל הכבוד אייל! אלוף!</h3>
+                <button onClick={startMatchGame} className="px-10 py-5 bg-purple-500 text-white rounded-3xl text-3xl font-black border-b-8 border-purple-700 active:border-b-0 active:translate-y-2">שחק שוב!</button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 gap-4 md:gap-6">
+                {matchCards.map((card, i) => {
+                  const isFlipped = flippedCards.some(c => c.id === card.id);
+                  const isMatched = matchedPairs.includes(card.pairId);
+                  return (
+                    <button
+                      key={i}
+                      onClick={() => handleCardClick(card)}
+                      disabled={isFlipped || isMatched}
+                      className={`h-32 md:h-40 rounded-3xl font-black text-6xl transition-all flex items-center justify-center border-b-8 active:border-b-0 active:translate-y-2
+                        ${isMatched ? 'opacity-0 scale-90 cursor-default'
+                        : isFlipped ? 'bg-purple-100 border-purple-300 text-purple-700 scale-105 border-b-4 translate-y-1'
+                        : 'bg-white border-slate-300 text-slate-300 hover:bg-slate-50'}`}
+                    >
+                      {isFlipped || isMatched ? card.display : '❔'}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
+        )}
 
-          <button
-            onClick={() => setCurrentView('menu')}
-            className="w-full mt-4 bg-gray-400 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg"
-          >
-            Back to Menu
-          </button>
-        </div>
+        {/* --- SENTENCES --- */}
+        {view === 'sentences' && (
+          <div className="bg-white rounded-[3rem] p-10 shadow-2xl border-4 border-orange-200 text-center">
+            <h2 className="text-4xl font-black text-orange-600 mb-12">משפטים ראשונים 🗣️</h2>
+
+            <div className="text-[100px] mb-10 drop-shadow-lg">{simpleSentencesData[currentIndex].icon}</div>
+
+            <button
+              onClick={() => speak(simpleSentencesData[currentIndex].audio)}
+              className="bg-orange-100 border-4 border-orange-300 rounded-3xl p-8 w-full block hover:bg-orange-200 transition-colors"
+              dir="ltr"
+            >
+              <p className="text-5xl font-black text-slate-800">{simpleSentencesData[currentIndex].text}</p>
+              <p className="text-lg text-orange-600 font-bold mt-4">לחץ כדי לשמוע 🔊</p>
+            </button>
+
+            <div className="flex justify-between mt-12">
+              <button onClick={() => setCurrentIndex(prev => (prev - 1 + simpleSentencesData.length) % simpleSentencesData.length)} className="w-20 h-20 bg-slate-100 rounded-full text-3xl flex items-center justify-center border-b-4 border-slate-300 active:border-b-0 active:translate-y-1">⬅️</button>
+              <button onClick={() => setCurrentIndex(prev => (prev + 1) % simpleSentencesData.length)} className="w-20 h-20 bg-slate-100 rounded-full text-3xl flex items-center justify-center border-b-4 border-slate-300 active:border-b-0 active:translate-y-1">➡️</button>
+            </div>
+          </div>
+        )}
+
       </div>
-    );
-  };
-
-  // --- Find It Game ---
-  const findItGame = () => {
-    const gameItems = alphabetData;
-    const randomIndex = Math.floor(Math.random() * gameItems.length);
-    const target = gameItems[randomIndex];
-    const [targetIndex] = useState(randomIndex);
-    const [answered, setAnswered] = useState(false);
-    const [correct, setCorrect] = useState(false);
-
-    // Get 4 random items (ensure target is included)
-    const [options] = useState(() => {
-      const opts = [targetIndex];
-      while (opts.length < 4) {
-        const idx = Math.floor(Math.random() * gameItems.length);
-        if (!opts.includes(idx)) opts.push(idx);
-      }
-      return opts.sort(() => Math.random() - 0.5);
-    });
-
-    useEffect(() => {
-      if (!answered) {
-        speakText(`Find the ${target.word}!`);
-      }
-    }, []);
-
-    const handleChoice = (idx) => {
-      setAnswered(true);
-      if (idx === targetIndex) {
-        setCorrect(true);
-        setScore(score + 1);
-        setGameMessage('🎉 Correct! Great job!');
-      } else {
-        setGameMessage('Try again!');
-      }
-    };
-
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-pink-300 to-pink-100 flex flex-col items-center justify-center p-4">
-        <div className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-2xl">
-          <h2 className="text-3xl font-bold text-center mb-6 text-pink-600">Find the {target.word}!</h2>
-
-          <div className="grid grid-cols-2 gap-4 mb-6">
-            {options.map((optIdx, i) => (
-              <button
-                key={i}
-                onClick={() => handleChoice(optIdx)}
-                className="bg-gradient-to-b from-yellow-200 to-yellow-300 hover:from-yellow-300 hover:to-yellow-400 rounded-2xl p-6 shadow-lg transform hover:scale-105 transition"
-              >
-                <div className="text-7xl mb-2">{gameItems[optIdx].icon}</div>
-                <div className="text-2xl font-bold">{gameItems[optIdx].letter}</div>
-              </button>
-            ))}
-          </div>
-
-          {gameMessage && (
-            <div className="text-center mb-4 text-2xl font-bold text-green-600">{gameMessage}</div>
-          )}
-
-          <div className="flex gap-3 justify-center">
-            <button
-              onClick={() => {
-                setCurrentView('findIt');
-              }}
-              className="bg-pink-500 hover:bg-pink-600 text-white font-bold py-2 px-6 rounded-lg text-lg"
-            >
-              Play Again
-            </button>
-            <button
-              onClick={() => setCurrentView('menu')}
-              className="bg-gray-400 hover:bg-gray-500 text-white font-bold py-2 px-6 rounded-lg text-lg"
-            >
-              Menu
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // --- Match Game ---
-  const matchGame = () => {
-    const gameData = alphabetData.slice(0, 3); // 3 pairs
-    const [cardData] = useState(() => {
-      const data = [];
-      gameData.forEach((item, idx) => {
-        data.push({ type: 'letter', value: item.letter, pair: idx });
-        data.push({ type: 'icon', value: item.icon, pair: idx });
-      });
-      return data.sort(() => Math.random() - 0.5);
-    });
-
-    const [flipped, setFlipped] = useState([]);
-    const [matched, setMatched] = useState([]);
-
-    const handleCardClick = (idx) => {
-      if (matched.includes(idx) || flipped.includes(idx)) return;
-      const newFlipped = [...flipped, idx];
-      setFlipped(newFlipped);
-
-      if (newFlipped.length === 2) {
-        if (
-          cardData[newFlipped[0]].pair === cardData[newFlipped[1]].pair
-        ) {
-          setMatched([...matched, ...newFlipped]);
-          setScore(score + 1);
-        }
-        setTimeout(() => setFlipped([]), 1000);
-      }
-    };
-
-    if (matched.length === cardData.length) {
-      return (
-        <div className="min-h-screen bg-gradient-to-b from-green-300 to-green-100 flex flex-col items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl p-8 text-center w-full max-w-md">
-            <div className="text-8xl mb-4">🎉</div>
-            <h2 className="text-4xl font-bold text-green-600 mb-4">You Won!</h2>
-            <p className="text-2xl mb-6">Great Memory!</p>
-            <button
-              onClick={() => {
-                setCurrentView('match');
-              }}
-              className="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-lg text-xl mb-3"
-            >
-              Play Again
-            </button>
-            <button
-              onClick={() => setCurrentView('menu')}
-              className="w-full bg-gray-400 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg"
-            >
-              Back to Menu
-            </button>
-          </div>
-        </div>
-      );
-    }
-
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-orange-300 to-orange-100 flex flex-col items-center justify-center p-4">
-        <div className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-2xl">
-          <h2 className="text-3xl font-bold text-center mb-6 text-orange-600">Match Game!</h2>
-          <div className="grid grid-cols-3 gap-3 mb-6">
-            {cardData.map((card, idx) => (
-              <button
-                key={idx}
-                onClick={() => handleCardClick(idx)}
-                className={`p-6 rounded-xl text-4xl font-bold transition transform ${
-                  flipped.includes(idx) || matched.includes(idx)
-                    ? 'bg-white text-center'
-                    : 'bg-blue-400 hover:bg-blue-500'
-                } ${matched.includes(idx) ? 'opacity-50' : ''}`}
-              >
-                {flipped.includes(idx) || matched.includes(idx) ? card.value : '?'}
-              </button>
-            ))}
-          </div>
-          <button
-            onClick={() => setCurrentView('menu')}
-            className="w-full bg-gray-400 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg"
-          >
-            Back to Menu
-          </button>
-        </div>
-      </div>
-    );
-  };
-
-  // --- Sentences View ---
-  const sentencesView = () => {
-    const current = simpleSentencesData[currentIndex];
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-teal-300 to-teal-100 flex flex-col items-center justify-center p-4">
-        <div className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-md">
-          <div className="text-center mb-6">
-            <div className="text-6xl mb-4">{current.icon}</div>
-            <div className="text-3xl font-bold text-teal-600 mb-4">{current.text}</div>
-          </div>
-
-          <button
-            onClick={() => speakText(current.audio)}
-            className="w-full bg-green-400 hover:bg-green-500 text-white font-bold py-3 px-4 rounded-lg mb-4 text-xl"
-          >
-            🔊 Hear it!
-          </button>
-
-          <div className="flex gap-3 justify-center">
-            <button
-              onClick={() => setCurrentIndex((currentIndex - 1 + simpleSentencesData.length) % simpleSentencesData.length)}
-              className="bg-teal-500 hover:bg-teal-600 text-white font-bold py-2 px-6 rounded-lg text-lg"
-            >
-              ← Back
-            </button>
-            <button
-              onClick={() => setCurrentIndex((currentIndex + 1) % simpleSentencesData.length)}
-              className="bg-teal-500 hover:bg-teal-600 text-white font-bold py-2 px-6 rounded-lg text-lg"
-            >
-              Next →
-            </button>
-          </div>
-
-          <button
-            onClick={() => setCurrentView('menu')}
-            className="w-full mt-4 bg-gray-400 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg"
-          >
-            Back to Menu
-          </button>
-        </div>
-      </div>
-    );
-  };
-
-  // --- Menu ---
-  const menuView = () => {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-indigo-400 to-indigo-200 flex flex-col items-center justify-center p-4">
-        <div className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-md text-center">
-          <div className="text-8xl mb-4">🌟</div>
-          <h1 className="text-5xl font-bold text-indigo-600 mb-2">Eyal's</h1>
-          <h2 className="text-4xl font-bold text-indigo-600 mb-8">Learning Games</h2>
-
-          <div className="space-y-3">
-            <button
-              onClick={() => {
-                setCurrentIndex(0);
-                setCurrentView('abc');
-              }}
-              className="w-full bg-blue-400 hover:bg-blue-500 text-white font-bold py-4 px-4 rounded-xl text-2xl"
-            >
-              🔤 ABC's
-            </button>
-            <button
-              onClick={() => {
-                setCurrentIndex(0);
-                setCurrentView('words');
-              }}
-              className="w-full bg-purple-400 hover:bg-purple-500 text-white font-bold py-4 px-4 rounded-xl text-2xl"
-            >
-              📚 First Words
-            </button>
-            <button
-              onClick={() => {
-                setScore(0);
-                setCurrentView('findIt');
-              }}
-              className="w-full bg-pink-400 hover:bg-pink-500 text-white font-bold py-4 px-4 rounded-xl text-2xl"
-            >
-              🔍 Find It!
-            </button>
-            <button
-              onClick={() => {
-                setScore(0);
-                setCurrentView('match');
-              }}
-              className="w-full bg-orange-400 hover:bg-orange-500 text-white font-bold py-4 px-4 rounded-xl text-2xl"
-            >
-              🎮 Match Game
-            </button>
-            <button
-              onClick={() => {
-                setCurrentIndex(0);
-                setCurrentView('sentences');
-              }}
-              className="w-full bg-teal-400 hover:bg-teal-500 text-white font-bold py-4 px-4 rounded-xl text-2xl"
-            >
-              📖 Sentences
-            </button>
-          </div>
-
-          <p className="mt-6 text-lg text-gray-600">Score: {score}</p>
-        </div>
-      </div>
-    );
-  };
-
-  // --- Main Render ---
-  return (
-    <div className="font-sans">
-      {currentView === 'menu' && menuView()}
-      {currentView === 'abc' && abcView()}
-      {currentView === 'words' && wordsView()}
-      {currentView === 'findIt' && findItGame()}
-      {currentView === 'match' && matchGame()}
-      {currentView === 'sentences' && sentencesView()}
     </div>
   );
 }
