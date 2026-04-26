@@ -1,9 +1,9 @@
 {
-  "name": "shoham-app",
+  "name": "eyal-app",
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "homepage": "https://SoSNate.github.io/SHOHAM", 
+  "homepage": "https://SoSNate.github.io/EYAL", 
 "scripts": {
     "dev": "vite",
     "build": "vite build",
